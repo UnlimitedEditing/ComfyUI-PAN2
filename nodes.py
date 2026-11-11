@@ -266,6 +266,7 @@ class PAN2Sampler:
 
         # platform may inject any default /size: snap to the VAE-stride x patch grid instead of rejecting
         width, height = max(64, int(round(width / 32)) * 32), max(64, int(round(height / 32)) * 32)
+        length = max(1, (int(length) - 1) // VAE_STRIDE_T * VAE_STRIDE_T + 1)  # Wan VAE wants 4k+1 frames
         lf = Wan22()
         dev = model.device
         T = (length - 1) // VAE_STRIDE_T + 1
