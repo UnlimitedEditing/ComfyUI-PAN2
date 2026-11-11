@@ -333,7 +333,14 @@ class PAN2Sampler:
                     torch.cuda.synchronize()
                 if i < 3 or i == steps - 1:
                     _log(f"sampler: step {i + 1}/{steps} took {time.time() - t_step:.1f}s")
+                if i in (0, steps // 2, steps - 1):
+                    _log(f"sampler: step {i + 1} velocity std {v.float().std():.3f}, latent mean {latents.mean():.3f} "
+                         f"std {latents.std():.3f} absmax {latents.abs().max():.2f}")
         _log(f"sampler: loop done in {time.time() - t_loop:.1f}s")
+        per_frame = [round(float(latents[0, :, f].std()), 3) for f in range(min(T, 8))]
+        per_chan = latents[0].float().flatten(1).std(dim=1)
+        _log(f"sampler: FINAL (normalized space) per-latent-frame std {per_frame}; "
+             f"per-channel std min {per_chan.min():.3f} max {per_chan.max():.3f}")
 
         out = lf.process_out(latents.float().cpu())  # back to raw VAE space for core VAEDecode
         return ({"samples": out},)
