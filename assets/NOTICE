@@ -1,0 +1,5 @@
+negative_template.json is the default negative prompt shipped with IFM/PAN2
+(https://github.com/ifm-ai/PAN2, inference/prompts/negative_prompt.json),
+Copyright MBZUAI, licensed under the Apache License 2.0. It is included unmodified; the
+nodes only rewrite its time_range_sec fields to the clip duration, exactly as the official
+inference code does (inference/inputs.py: render_negative_duration).

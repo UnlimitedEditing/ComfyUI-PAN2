@@ -23,6 +23,7 @@ import comfy.utils
 import folder_paths
 
 from . import pan2_model
+from . import prompt_builder
 
 QWEN_ID = "Qwen/Qwen3.5-9B"
 SYSTEM_PROMPT = "You are a helpful assistant. Generate the video with the following instructions."
@@ -179,7 +180,8 @@ class PAN2TextEncode:
             "prompt": ("STRING", {"multiline": True, "default": ""}),
             "negative_prompt": ("STRING", {"multiline": True, "default": ""}),
             "qwen": ("STRING", {"default": QWEN_ID, "tooltip": "HF id or local folder of Qwen3.5-9B"}),
-            "max_caption_tokens": ("INT", {"default": 1000, "min": 16, "max": 1536}),
+            "max_caption_tokens": ("INT", {"default": 1536, "min": 16, "max": 1536,
+                                           "tooltip": "the official negative alone is ~1480 tokens"}),
             "free_after": ("BOOLEAN", {"default": True}),
         }}
 
@@ -212,6 +214,36 @@ class PAN2TextEncode:
                 gc.collect()
             mm.soft_empty_cache()
         return ({"embeds": pos}, {"embeds": neg})
+
+
+class PAN2PromptBuilder:
+    """Short description -> PAN 2's structured JSON prompt + the official structured negative (see prompt_builder.py)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {
+            "description": ("STRING", {"multiline": True, "default":
+                            "A small red fishing boat floats on calm water at sunrise, low sun on the left horizon.",
+                            "tooltip": "scene ;; event ;; subject ;; lighting ;; viewpoint ;; style  (only the scene is required). "
+                                       "With a subject ('Name: appearance'), write the event as what it does."}),
+            "frames": ("INT", {"default": 13, "min": 1, "max": 481, "step": 4,
+                               "tooltip": "snapped to 4k+1; time ranges use (frames-1)/24 s"}),
+            "camera": ("INT", {"default": 0, "min": 0, "max": 15,
+                               "tooltip": "0 static, 1 pan_left, 2 pan_right, 3 tilt_up, 4 tilt_down, 5 track_left, 6 track_right, "
+                                          "7 dolly_forward, 8 dolly_backward, 9 dolly_up, 10 dolly_down, 11 zoom_in, 12 zoom_out, "
+                                          "13 roll_clockwise, 14 roll_counterclockwise, 15 unstable"}),
+        }}
+
+    RETURN_TYPES = ("STRING", "STRING", "INT")
+    RETURN_NAMES = ("prompt", "negative_prompt", "frames")
+    FUNCTION = "build"
+    CATEGORY = "PAN2"
+
+    def build(self, description, frames, camera):
+        pos, neg, n = prompt_builder.build(description, frames, camera)
+        _log(f"prompt builder: {n} frames = {(n - 1) / prompt_builder.FPS:g} s, camera {prompt_builder.CAMERA_TAGS[min(camera, 15)]}, "
+             f"prompt {len(pos)} chars, negative {len(neg)} chars")
+        return (pos, neg, n)
 
 
 # ----------------------------------------------------------------------------- sampler
@@ -349,10 +381,12 @@ class PAN2Sampler:
 NODE_CLASS_MAPPINGS = {
     "PAN2ModelLoader": PAN2ModelLoader,
     "PAN2TextEncode": PAN2TextEncode,
+    "PAN2PromptBuilder": PAN2PromptBuilder,
     "PAN2Sampler": PAN2Sampler,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PAN2ModelLoader": "PAN2 Model Loader",
     "PAN2TextEncode": "PAN2 Text Encode (Qwen3.5)",
+    "PAN2PromptBuilder": "PAN2 Prompt Builder",
     "PAN2Sampler": "PAN2 Sampler",
 }
