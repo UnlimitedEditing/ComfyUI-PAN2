@@ -442,9 +442,17 @@ class _Swap:
 
 
 def move_nonblock_to(model: PAN2Transformer, device):
-    for name, child in model.named_children():
-        if name != "transformer_blocks":
-            child.to(device)
+    """Everything except the 44 joint blocks, including bare parameters (context_type_embedding) that
+    named_children() would miss (that omission was the cause of the first Graydient probe failure)."""
+    for name, p in model.named_parameters():
+        if not name.startswith("transformer_blocks."):
+            p.data = p.data.to(device)
+    for name, m in model.named_modules():
+        if name.startswith("transformer_blocks"):
+            continue
+        for bn, b in list(m._buffers.items()):
+            if b is not None:
+                m._buffers[bn] = b.to(device)
 
 
 def move_blocks_to(model: PAN2Transformer, device):
