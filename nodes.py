@@ -233,13 +233,29 @@ class PAN2LoadImageURL:
         import numpy as np
         from PIL import Image, ImageOps
 
-        url = (url or "").strip()
-        if not url.lower().startswith(("http://", "https://")):
-            raise ValueError("PAN2LoadImageURL: no start image. Send an image (reply to one) or pass its https URL as the init image.")
-        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 ComfyUI-PAN2"})
+        import glob
+
+        val = (url or "").strip()
         t0 = time.time()
-        with urllib.request.urlopen(req, timeout=60) as r:
-            data = r.read()
+        _log(f"start image input: {val[:120]!r}")
+        if val.lower().startswith(("http://", "https://")):
+            req = urllib.request.Request(val, headers={"User-Agent": "Mozilla/5.0 ComfyUI-PAN2"})
+            with urllib.request.urlopen(req, timeout=60) as r:
+                data = r.read()
+        else:
+            # Graydient stages sent/replied images into the input folder and may hand over the local file name
+            inp = folder_paths.get_input_directory()
+            found = None
+            if val:
+                cands = [os.path.join(inp, val)]
+                cands += glob.glob(os.path.join(inp, "**", val + "*"), recursive=True)
+                cands += glob.glob(os.path.join(inp, "**", "*" + val + "*"), recursive=True)
+                found = next((c for c in cands if os.path.isfile(c)), None)
+            if not found:
+                have = sorted(os.listdir(inp))[:12] if os.path.isdir(inp) else []
+                raise ValueError(f"PAN2LoadImageURL: no start image. Got {val!r}; send/reply with an image or pass an https URL as the init image. input folder has: {have}")
+            with open(found, "rb") as f:
+                data = f.read()
         img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
         _log(f"start image: {img.size[0]}x{img.size[1]}, {len(data) / 1024:.0f} KB in {time.time() - t0:.1f}s")
         arr = np.asarray(img).astype(np.float32) / 255.0
