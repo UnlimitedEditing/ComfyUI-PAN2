@@ -216,6 +216,36 @@ class PAN2TextEncode:
         return ({"embeds": pos}, {"embeds": neg})
 
 
+class PAN2LoadImageURL:
+    """Start image for i2v from a URL (Graydient passes `init_image_url` as a string; core LoadImage only takes local files)."""
+
+    @classmethod
+    def INPUT_TYPES(cls):
+        return {"required": {"url": ("STRING", {"default": "", "multiline": False})}}
+
+    RETURN_TYPES = ("IMAGE",)
+    FUNCTION = "load"
+    CATEGORY = "PAN2"
+
+    def load(self, url):
+        import io
+        import urllib.request
+        import numpy as np
+        from PIL import Image, ImageOps
+
+        url = (url or "").strip()
+        if not url.lower().startswith(("http://", "https://")):
+            raise ValueError("PAN2LoadImageURL: no start image. Send an image (reply to one) or pass its https URL as the init image.")
+        req = urllib.request.Request(url, headers={"User-Agent": "Mozilla/5.0 ComfyUI-PAN2"})
+        t0 = time.time()
+        with urllib.request.urlopen(req, timeout=60) as r:
+            data = r.read()
+        img = ImageOps.exif_transpose(Image.open(io.BytesIO(data))).convert("RGB")
+        _log(f"start image: {img.size[0]}x{img.size[1]}, {len(data) / 1024:.0f} KB in {time.time() - t0:.1f}s")
+        arr = np.asarray(img).astype(np.float32) / 255.0
+        return (torch.from_numpy(arr)[None],)
+
+
 class PAN2PromptBuilder:
     """Short description -> PAN 2's structured JSON prompt + the official structured negative (see prompt_builder.py)."""
 
@@ -382,11 +412,13 @@ NODE_CLASS_MAPPINGS = {
     "PAN2ModelLoader": PAN2ModelLoader,
     "PAN2TextEncode": PAN2TextEncode,
     "PAN2PromptBuilder": PAN2PromptBuilder,
+    "PAN2LoadImageURL": PAN2LoadImageURL,
     "PAN2Sampler": PAN2Sampler,
 }
 NODE_DISPLAY_NAME_MAPPINGS = {
     "PAN2ModelLoader": "PAN2 Model Loader",
     "PAN2TextEncode": "PAN2 Text Encode (Qwen3.5)",
     "PAN2PromptBuilder": "PAN2 Prompt Builder",
+    "PAN2LoadImageURL": "PAN2 Load Image From URL",
     "PAN2Sampler": "PAN2 Sampler",
 }
